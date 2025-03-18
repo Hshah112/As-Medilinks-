@@ -1,0 +1,68 @@
+body {
+    font-family: 'Roboto', sans-serif;
+    padding: 20px;
+    background-color: #f5f6fa;
+}
+
+.tab-btn {
+    margin-right: 5px;
+    margin-bottom: 10px;
+}
+
+.tab-content {
+    display: none;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.active {
+    background-color: #3498db !important;
+    color: white !important;
+}
+
+.table {
+    margin-top: 20px;
+}
+
+.search-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-top: 10px;
+    position: absolute;
+    width: 32%;
+    z-index: 1000;
+    background: white;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+    cursor: pointer;
+}
+
+h2 {
+    color: #2c3e50;
+    margin-bottom: 20px;
+}
+
+h3 {
+    color: #34495e;
+    margin-bottom: 15px;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.form-control {
+    border-radius: 4px;
+}
+
+.table th {
+    background-color: #3498db;
+    color: white;
+}
