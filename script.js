@@ -2,6 +2,7 @@ let predefinedItems = JSON.parse(localStorage.getItem("predefinedItems")) || [];
 let invoiceItems = [];
 let savedInvoices = JSON.parse(localStorage.getItem("savedInvoices")) || [];
 let editingInvoiceIndex = null;
+let hot; // Handsontable instance
 
 function openTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = "none");
@@ -11,95 +12,141 @@ function openTab(tabName) {
     closeInvoiceDetail();
 }
 
-// Predefined Items Functions
-function addPredefinedItem() {
-    let name = document.getElementById('itemName').value;
-    let batch = document.getElementById('batchNumber').value;
-    let price = parseFloat(document.getElementById('itemPrice').value);
-    let stock = parseInt(document.getElementById('itemStock').value);
-    if (!name || !batch || isNaN(price) || isNaN(stock)) {
-        alert("Please fill all fields correctly");
-        return;
-    }
-    predefinedItems.push({ name, batch, price, stock, isEditing: false });
-    localStorage.setItem("predefinedItems", JSON.stringify(predefinedItems));
-    displayPredefinedItems();
-    clearInputs('predefinedSection');
+// Custom renderers for action buttons
+function editRenderer(instance, td, row, col, prop, value, cellProperties) {
+    td.innerHTML = `<button class="btn btn-primary btn-sm" onclick="editRow(${row})" title="Edit"><i class="fas fa-edit"></i></button>`;
+    td.className = 'action-btn';
+    return td;
 }
 
-function displayPredefinedItems() {
-    let table = document.getElementById('predefinedTable');
-    table.innerHTML = `
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Batch</th>
-                <th>Price</th>
-                <th>Stock</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>`;
-    predefinedItems.forEach((item, index) => {
-        table.innerHTML += `
-            <tr>
-                <td>${item.isEditing ? `<input type="text" class="form-control" value="${item.name}" id="editName${index}">` : item.name}</td>
-                <td>${item.isEditing ? `<input type="text" class="form-control" value="${item.batch}" id="editBatch${index}">` : item.batch}</td>
-                <td>${item.isEditing ? `<input type="number" class="form-control" value="${item.price}" id="editPrice${index}" step="0.01">` : item.price.toFixed(2)}</td>
-                <td>${item.isEditing ? `<input type="number" class="form-control" value="${item.stock}" id="editStock${index}">` : item.stock}</td>
-                <td>
-                    ${item.isEditing ? 
-                        `<button class="btn btn-success btn-sm" onclick="savePredefinedItem(${index})">Save</button>
-                         <button class="btn btn-secondary btn-sm" onclick="cancelEditPredefined(${index})">Cancel</button>` :
-                        `<button class="btn btn-primary btn-sm" onclick="editPredefinedItem(${index})">Edit</button>`}
-                    <button class="btn btn-danger btn-sm" onclick="deletePredefinedItem(${index})">Delete</button>
-                </td>
-            </tr>`;
-    });
-    table.innerHTML += `</tbody>`;
+function deleteRenderer(instance, td, row, col, prop, value, cellProperties) {
+    td.innerHTML = `<button class="btn btn-danger btn-sm" onclick="deleteRow(${row})" title="Delete"><i class="fas fa-trash"></i></button>`;
+    td.className = 'action-btn';
+    return td;
 }
 
-function editPredefinedItem(index) {
-    predefinedItems[index].isEditing = true;
-    displayPredefinedItems();
+function saveRenderer(instance, td, row, col, prop, value, cellProperties) {
+    td.innerHTML = `<button class="btn btn-success btn-sm" onclick="saveRow(${row})" title="Save"><i class="fas fa-save"></i></button>`;
+    td.className = 'action-btn';
+    return td;
 }
 
-function savePredefinedItem(index) {
-    const updatedItem = {
-        name: document.getElementById(`editName${index}`).value,
-        batch: document.getElementById(`editBatch${index}`).value,
-        price: parseFloat(document.getElementById(`editPrice${index}`).value),
-        stock: parseInt(document.getElementById(`editStock${index}`).value),
+function editRow(row) {
+    hot.selectCell(row, 0);
+}
+
+function deleteRow(row) {
+    hot.alter('remove_row', row);
+}
+
+function saveRow(row) {
+    const rowData = hot.getDataAtRow(row);
+    const newItem = {
+        name: rowData[0]?.trim() || '',
+        batch: rowData[1]?.trim() || '',
+        price: parseFloat(rowData[2]) || 0,
+        stock: parseInt(rowData[3]) || 0,
         isEditing: false
     };
-    if (!updatedItem.name || !updatedItem.batch || isNaN(updatedItem.price) || isNaN(updatedItem.stock)) {
-        alert("Please enter valid values");
+
+    if (!newItem.name || !newItem.batch || isNaN(newItem.price) || isNaN(newItem.stock)) {
+        alert("Please fill all fields with valid data before saving.");
         return;
     }
-    predefinedItems[index] = updatedItem;
-    localStorage.setItem("predefinedItems", JSON.stringify(predefinedItems));
-    displayPredefinedItems();
+
+    const duplicateIndex = predefinedItems.findIndex((item, index) => 
+        index !== row && item.name === newItem.name && item.batch === newItem.batch
+    );
+    if (duplicateIndex !== -1) {
+        alert("An item with this name and batch already exists.");
+        return;
+    }
+
+    predefinedItems[row] = newItem;
+    updatePredefinedItems();
 }
 
-function cancelEditPredefined(index) {
-    predefinedItems[index].isEditing = false;
-    displayPredefinedItems();
+// Initialize Handsontable for Predefined Items
+function initializeSpreadsheet() {
+    const container = document.getElementById('predefinedSpreadsheet');
+    hot = new Handsontable(container, {
+        data: predefinedItems.map(item => [item.name, item.batch, item.price, item.stock]),
+        colHeaders: ['Name', 'Batch', 'Price', 'Stock', 'Edit', 'Delete', 'Save'],
+        columns: [
+            { type: 'text' },
+            { type: 'text' },
+            { type: 'numeric', numericFormat: { pattern: '0.00' } },
+            { type: 'numeric' },
+            { renderer: editRenderer, readOnly: true, width: 60 },
+            { renderer: deleteRenderer, readOnly: true, width: 60 },
+            { renderer: saveRenderer, readOnly: true, width: 60 }
+        ],
+        rowHeaders: true,
+        minSpareRows: 1,
+        stretchH: 'all',
+        manualColumnResize: true,
+        manualRowResize: true,
+        contextMenu: true,
+        licenseKey: 'non-commercial-and-evaluation',
+        afterChange: (changes) => {
+            // No auto-save; wait for Save button
+        },
+        afterRemoveRow: () => {
+            updatePredefinedItems();
+        }
+    });
 }
 
-function deletePredefinedItem(index) {
-    predefinedItems.splice(index, 1);
+function updatePredefinedItems() {
+    const data = hot.getData();
+    predefinedItems = data
+        .filter(row => row[0] && row[1] && !isNaN(row[2]) && !isNaN(row[3]))
+        .map(row => ({
+            name: row[0].trim(),
+            batch: row[1].trim(),
+            price: parseFloat(row[2]),
+            stock: parseInt(row[3]),
+            isEditing: false
+        }));
+    
+    predefinedItems = predefinedItems.filter((item, index, self) =>
+        index === self.findIndex(t => t.name === item.name && t.batch === item.batch)
+    );
+    
     localStorage.setItem("predefinedItems", JSON.stringify(predefinedItems));
-    displayPredefinedItems();
+    hot.loadData(predefinedItems.map(item => [item.name, item.batch, item.price, item.stock]));
+}
+
+function addNewRow() {
+    hot.alter('insert_row', hot.countRows() - 1);
 }
 
 // Invoice Section Functions
 function searchInvoiceItem() {
-    let searchValue = document.getElementById('invoiceSearchItem').value.toLowerCase();
-    let filteredItems = predefinedItems.filter(item => item.name.toLowerCase().includes(searchValue));
-    document.getElementById('invoiceItemList').innerHTML = filteredItems.map(item =>
-        `<li class="list-group-item" onclick="selectInvoiceItem('${item.name}', '${item.batch}', ${item.price})">
-            ${item.name} - ${item.batch} - PKR ${item.price.toFixed(2)} (Stock: ${item.stock})
-        </li>`).join('');
+    const searchValue = document.getElementById('invoiceSearchItem').value.trim().toLowerCase();
+    const list = document.getElementById('invoiceItemList');
+    
+    if (searchValue === "") {
+        list.classList.remove('active');
+        list.innerHTML = "";
+        return;
+    }
+
+    const filteredItems = predefinedItems.filter(item => 
+        item.name.toLowerCase().includes(searchValue) || item.batch.toLowerCase().includes(searchValue)
+    );
+
+    if (filteredItems.length > 0) {
+        list.classList.add('active');
+        list.innerHTML = filteredItems.map(item => `
+            <li class="list-group-item" onclick="selectInvoiceItem('${item.name}', '${item.batch}', ${item.price})">
+                ${item.name} - ${item.batch} - PKR ${item.price.toFixed(2)} (Stock: ${item.stock})
+            </li>
+        `).join('');
+    } else {
+        list.classList.remove('active');
+        list.innerHTML = "";
+    }
 }
 
 function selectInvoiceItem(name, batch, price) {
@@ -108,6 +155,8 @@ function selectInvoiceItem(name, batch, price) {
     document.getElementById('invoicePrice').value = price.toFixed(2);
     document.getElementById('invoiceQty').value = 1;
     document.getElementById('invoiceDiscount').value = 0;
+    document.getElementById('invoiceSearchItem').value = "";
+    document.getElementById('invoiceItemList').classList.remove('active');
     calculateTotal();
 }
 
@@ -127,7 +176,7 @@ function addItemToInvoice() {
     let discountPercent = parseFloat(document.getElementById('invoiceDiscount').value) || 0;
     
     const itemIndex = predefinedItems.findIndex(item => item.name === name && item.batch === batch);
-    if (itemIndex === -1 || isNaN(price) || isNaN(qty) || qty > predefinedItems[itemIndex].stock) {
+    if (itemIndex === -1 || isNaN(price) || isNaN(qty) || qty <= 0 || qty > predefinedItems[itemIndex].stock) {
         alert(`Please enter valid values${qty > predefinedItems[itemIndex]?.stock ? ' (Quantity exceeds stock)' : ''}`);
         return;
     }
@@ -138,7 +187,7 @@ function addItemToInvoice() {
     
     predefinedItems[itemIndex].stock -= qty;
     localStorage.setItem("predefinedItems", JSON.stringify(predefinedItems));
-    displayPredefinedItems();
+    hot.loadData(predefinedItems.map(item => [item.name, item.batch, item.price, item.stock]));
     
     invoiceItems.push({ name, batch, price, qty, discountPercent, total, isEditing: false });
     updateInvoiceTable();
@@ -197,7 +246,11 @@ function updateInvoiceTotal(index) {
 
 function editInvoiceItem(index) {
     invoiceItems[index].isEditing = true;
-    updateInvoiceTable();
+    if (editingInvoiceIndex !== null) {
+        updateSavedInvoiceTable(); // Update saved invoice table if editing a saved invoice
+    } else {
+        updateInvoiceTable(); // Update new invoice table otherwise
+    }
 }
 
 function saveInvoiceItem(index) {
@@ -213,7 +266,7 @@ function saveInvoiceItem(index) {
     const itemIndex = predefinedItems.findIndex(item => item.name === updatedItem.name && item.batch === updatedItem.batch);
     const stockDifference = originalQty - updatedItem.qty;
     
-    if (isNaN(updatedItem.price) || isNaN(updatedItem.qty) || 
+    if (isNaN(updatedItem.price) || isNaN(updatedItem.qty) || updatedItem.qty <= 0 || 
         (stockDifference < 0 && Math.abs(stockDifference) > predefinedItems[itemIndex].stock)) {
         alert(`Please enter valid values${stockDifference < 0 ? ' (Quantity exceeds available stock)' : ''}`);
         return;
@@ -225,15 +278,23 @@ function saveInvoiceItem(index) {
     
     predefinedItems[itemIndex].stock += stockDifference;
     localStorage.setItem("predefinedItems", JSON.stringify(predefinedItems));
-    displayPredefinedItems();
+    hot.loadData(predefinedItems.map(item => [item.name, item.batch, item.price, item.stock]));
     
     invoiceItems[index] = updatedItem;
-    updateInvoiceTable();
+    if (editingInvoiceIndex !== null) {
+        updateSavedInvoiceTable();
+    } else {
+        updateInvoiceTable();
+    }
 }
 
 function cancelEditInvoice(index) {
     invoiceItems[index].isEditing = false;
-    updateInvoiceTable();
+    if (editingInvoiceIndex !== null) {
+        updateSavedInvoiceTable();
+    } else {
+        updateInvoiceTable();
+    }
 }
 
 function deleteInvoiceItem(index) {
@@ -241,9 +302,13 @@ function deleteInvoiceItem(index) {
     const itemIndex = predefinedItems.findIndex(i => i.name === item.name && i.batch === item.batch);
     predefinedItems[itemIndex].stock += item.qty;
     localStorage.setItem("predefinedItems", JSON.stringify(predefinedItems));
+    hot.loadData(predefinedItems.map(item => [item.name, item.batch, item.price, item.stock]));
     invoiceItems.splice(index, 1);
-    updateInvoiceTable();
-    displayPredefinedItems();
+    if (editingInvoiceIndex !== null) {
+        updateSavedInvoiceTable();
+    } else {
+        updateInvoiceTable();
+    }
 }
 
 // Saved Invoices Functions
@@ -284,7 +349,7 @@ function viewSavedInvoice(index) {
 function editSavedInvoice(index) {
     editingInvoiceIndex = index;
     const invoice = savedInvoices[index];
-    invoiceItems = JSON.parse(JSON.stringify(invoice.items));
+    invoiceItems = invoice.items.map(item => ({ ...item, isEditing: false })); // Deep copy with isEditing flag
     document.getElementById('invoiceDetailTitle').innerText = `Editing Invoice ${invoice.invoiceNo}`;
     updateSavedInvoiceTable();
     document.getElementById('saveEditedInvoiceBtn').style.display = 'inline-block';
@@ -338,7 +403,7 @@ function saveEditedInvoice() {
     savedInvoices[editingInvoiceIndex] = {
         ...savedInvoices[editingInvoiceIndex],
         amount: grandTotal,
-        items: JSON.parse(JSON.stringify(invoiceItems))
+        items: invoiceItems.map(item => ({ ...item, isEditing: false }))
     };
     localStorage.setItem("savedInvoices", JSON.stringify(savedInvoices));
     invoiceItems = [];
@@ -357,7 +422,7 @@ function printSavedInvoice(index) {
     const invoice = savedInvoices[index];
     const printWindow = window.open('', '_blank');
     const grandTotal = invoice.amount;
-    printWindow.document.write(`
+    const invoiceHtml = `
         <html>
         <head>
             <title>Invoice ${invoice.invoiceNo}</title>
@@ -403,10 +468,17 @@ function printSavedInvoice(index) {
             <div class="total">Grand Total: PKR ${grandTotal.toFixed(2)}</div>
         </body>
         </html>
-    `);
+    `;
+    printWindow.document.write(invoiceHtml);
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
+    
+    setTimeout(() => {
+        const viewWindow = window.open('', '_blank');
+        viewWindow.document.write(invoiceHtml);
+        viewWindow.document.close();
+    }, 500);
 }
 
 function exportSavedInvoiceToPDF(index) {
@@ -528,10 +600,10 @@ function deleteSavedInvoice(index) {
 
 function clearInputs(section) {
     document.querySelectorAll(`#${section} input`).forEach(input => input.value = "");
-    if (section === 'invoiceSection') document.getElementById('invoiceItemList').innerHTML = "";
+    if (section === 'invoiceSection') document.getElementById('invoiceItemList').classList.remove('active');
 }
 
 // Initialize
 openTab('predefinedSection');
-displayPredefinedItems();
+initializeSpreadsheet();
 displaySavedInvoices();
