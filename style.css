@@ -70,20 +70,28 @@ h3, h4 {
     overflow-y: auto;
     border: 1px solid #ddd;
     border-radius: 4px;
-    margin-top: 10px;
+    margin-top: 5px;
     position: absolute;
-    width: 32%;
+    width: 100%;
     z-index: 1000;
     background: white;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    display: none;
+}
+
+.search-list.active {
+    display: block;
 }
 
 .list-group-item {
-    padding: 10px;
+    padding: 8px 12px;
+    border: none;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
 }
 
 .list-group-item:hover {
-    background-color: #f8f9fa;
+    background-color: #e9ecef;
     cursor: pointer;
 }
 
@@ -95,6 +103,7 @@ h3, h4 {
 .form-control {
     border-radius: 4px;
     border: 1px solid #ced4da;
+    transition: border-color 0.2s ease;
 }
 
 .form-control:focus {
@@ -119,4 +128,19 @@ h3, h4 {
     padding: 15px;
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+#predefinedSpreadsheet {
+    height: 400px;
+    overflow: auto;
+}
+
+.ht_master .htCore td.action-btn {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.ht_master .htCore td.action-btn button {
+    margin: 0 2px;
+    padding: 2px 6px;
 }
